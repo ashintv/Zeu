@@ -53,3 +53,5 @@ type AiRequest struct {
 	Tools    []Tool
 	Messages []Coversation
 }
+
+
