@@ -6,7 +6,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 
 	"github.com/ashintv/Zeu/internal/logger"
@@ -24,27 +23,35 @@ type Ollama struct {
 
 type Option func(*Ollama)
 
-func WithModel(model string) Option {
+func WithOllamnaModel(model string) Option {
 	return func(o *Ollama) {
 		o.Model = model
 	}
 }
 
-func WithUrl(url string) Option {
+func WithOllamUrl(url string) Option {
 	return func(o *Ollama) {
 		o.Url = url
 
 	}
 }
 
-func WithApiKey(apiKey string) Option {
+func WithOllamaApiKey(apiKey string) Option {
 	return func(o *Ollama) {
 		o.ApiKey = apiKey
 
 	}
 }
 
-
+func (O *Ollama) Default() *types.DefaultOptions {
+	return &types.DefaultOptions{
+		Model:    O.Model,
+		ApiKey:   O.ApiKey,
+		Temp:     O.Temp,
+		Url:      O.Url,
+		DataType: O.DataType,
+	}
+}
 
 func NewOllama(opts ...Option) *Ollama {
 	o := Ollama{
@@ -58,14 +65,14 @@ func NewOllama(opts ...Option) *Ollama {
 	for _, opt := range opts {
 		opt(&o)
 	}
-
 	return &o
 }
 
 func (O *Ollama) Process(ctx context.Context, req *types.AiRequest, streamCh chan<- types.AiResponse) (err error) {
+	defer close(streamCh)
+
 	_ = ctx
 	_ = streamCh
-
 	reqBody := O.BuildRequest(req)
 	parsed, err := json.Marshal(reqBody)
 
@@ -79,14 +86,11 @@ func (O *Ollama) Process(ctx context.Context, req *types.AiRequest, streamCh cha
 		logger.Error("Error sending Request", reqBody)
 		return err
 	}
-	
 	defer resp.Body.Close()
-	defer close(streamCh)
-	
-	scanner := bufio.NewScanner(resp.Body)
 
+	scanner := bufio.NewScanner(resp.Body)
 	for scanner.Scan() {
-		
+
 		line := scanner.Text()
 
 		var chunk map[string]any
@@ -105,55 +109,25 @@ func (O *Ollama) Process(ctx context.Context, req *types.AiRequest, streamCh cha
 }
 
 func (O *Ollama) BuildRequest(req *types.AiRequest) *types.OllamaChatRequest {
+
+	message := types.Coversation{
+		Role: "system",
+		Content: req.System,
+	}
+
+	messages := append([]types.Coversation{message},req.Messages...)
+
 	return &types.OllamaChatRequest{
 		Model:    O.Model,
-		Messages: req.Messages,
+		Messages: messages,
 		Stream:   true,
 		Tools:    req.Tools,
 	}
 }
 
-func StreamChat() error {
-
-	reqBody := []byte(`{
-		"model":"qwen3",
-		"messages":[
-			{
-				"role":"user",
-				"content":"Hello"
-			}
-		],
-		"stream":true
-	}`)
-
-	resp, err := http.Post(
-		"http://localhost:11434/api/chat",
-		"application/json",
-		bytes.NewBuffer(reqBody),
-	)
-	if err != nil {
-		return err
+func (O *Ollama) Info() types.ProviderInfo {
+	return types.ProviderInfo{
+		Model: O.Model,
+		Name: O.Name,
 	}
-	defer resp.Body.Close()
-
-	scanner := bufio.NewScanner(resp.Body)
-
-	for scanner.Scan() {
-		line := scanner.Text()
-
-		log.Println(line)
-
-		var chunk map[string]any
-
-		if err := json.Unmarshal(
-			[]byte(line),
-			&chunk,
-		); err != nil {
-			continue
-		}
-
-		fmt.Println(chunk)
-	}
-
-	return scanner.Err()
 }

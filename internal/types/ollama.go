@@ -16,10 +16,10 @@ type OllamaTool struct {
 }
 
 type OllamaChatRequest struct {
-	Model    string            `json:"model"`
-	Messages []Coversation     `json:"messages"`
-	Stream   bool              `json:"stream"`
-	Tools    []json.RawMessage `json:"tools,omitempty"`
+	Model    string        `json:"model"`
+	Messages []Coversation `json:"messages"`
+	Stream   bool          `json:"stream"`
+	Tools    []Tool        `json:"tools,omitempty"`
 }
 
 type OllamaChatMessage struct {
@@ -42,5 +42,3 @@ type OllamaChatResponse struct {
 	EvalCount          int               `json:"eval_count,omitempty"`
 	EvalDuration       int64             `json:"eval_duration,omitempty"`
 }
-
-

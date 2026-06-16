@@ -2,8 +2,33 @@ package types
 
 import "encoding/json"
 
-
 const DEFAULT_API_KEY = "KEY_NOT_SET_DEFAULT_API_KEY"
+
+// ToolParameterProperty defines a single property in the parameters object
+type ToolParameterProperty struct {
+	Type        string `json:"type"`
+	Description string `json:"description,omitempty"`
+}
+
+// ToolParameters defines the parameters schema for a tool function
+type ToolParameters struct {
+	Type       string                           `json:"type"`
+	Required   []string                         `json:"required,omitempty"`
+	Properties map[string]ToolParameterProperty `json:"properties"`
+}
+
+// ToolFunction defines the function details for a tool
+type ToolFunction struct {
+	Name        string         `json:"name"`
+	Description string         `json:"description"`
+	Parameters  ToolParameters `json:"parameters"`
+}
+
+// Tool represents a generic tool that can be used across different providers
+type Tool struct {
+	Type     string       `json:"type"`
+	Function ToolFunction `json:"function"`
+}
 
 type ToolCall struct {
 	Id   string
@@ -25,9 +50,6 @@ type AiResponse struct {
 
 type AiRequest struct {
 	System   string
-	ApiKey   string
-	Tools    []json.RawMessage
+	Tools    []Tool
 	Messages []Coversation
 }
-
-
