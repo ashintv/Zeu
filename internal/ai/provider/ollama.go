@@ -5,7 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
+	
 	"net/http"
 
 	"github.com/ashintv/Zeu/internal/logger"
@@ -68,7 +68,7 @@ func NewOllama(opts ...Option) *Ollama {
 	return &o
 }
 
-func (O *Ollama) Process(ctx context.Context, req *types.AiRequest, streamCh chan<- types.AiResponse) (err error) {
+func (O *Ollama) Process(ctx context.Context, req *types.AiRequest, streamCh chan<- types.AiResponse) {
 	defer close(streamCh)
 
 	_ = ctx
@@ -78,22 +78,26 @@ func (O *Ollama) Process(ctx context.Context, req *types.AiRequest, streamCh cha
 
 	if err != nil {
 		logger.Error("Unable to parse", reqBody)
-		return err
+		streamCh <- types.AiResponse{
+			Err: err,
+		}
+		return
 	}
 
 	resp, err := http.Post(O.Url, O.DataType, bytes.NewBuffer(parsed))
 	if err != nil {
-		logger.Error("Error sending Request", reqBody)
-		return err
+		streamCh <- types.AiResponse{
+			Err: err,
+		}
+		return
 	}
 	defer resp.Body.Close()
-
 	scanner := bufio.NewScanner(resp.Body)
 	for scanner.Scan() {
 
 		line := scanner.Text()
 
-		var chunk map[string]any
+		var chunk types.OllamaChatResponse
 
 		if err := json.Unmarshal(
 			[]byte(line),
@@ -102,10 +106,21 @@ func (O *Ollama) Process(ctx context.Context, req *types.AiRequest, streamCh cha
 			continue
 		}
 
-		fmt.Println(chunk)
-
+		aiResponse := types.AiResponse{
+			Messages:   chunk.Message.Content,
+			Err:        nil,
+			TimeStamp:  chunk.CreatedAt,
+			ToolsCalls: chunk.Message.ToolCalls,
+		}
+		
+		streamCh <- aiResponse
 	}
-	return scanner.Err()
+
+	err = scanner.Err()
+	if err!= nil{
+		logger.Error(err)
+	}
+	
 }
 
 func (O *Ollama) BuildRequest(req *types.AiRequest) *types.OllamaChatRequest {

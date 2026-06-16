@@ -10,7 +10,7 @@ import (
 
 type Provider interface {
 	Info() types.ProviderInfo
-	Process(ctx context.Context, req *types.AiRequest, streamCh chan<- types.AiResponse) (err error)
+	Process(ctx context.Context, req *types.AiRequest, streamCh chan<- types.AiResponse)
 	Default() *types.DefaultOptions
 }
 
@@ -25,7 +25,6 @@ func Withprovider(prv Provider) AiOpts {
 		a.provider = prv
 	}
 }
-
 
 func NewAI(opts ...AiOpts) *AI {
 	a := AI{
@@ -78,7 +77,7 @@ func DefaultSystemPrompt() string {
 			Your goal is successful task completion while maintaining accuracy, reliability, and helpfulness.`
 }
 
-func (a *AI) Invoke(ctx context.Context, opts ...InvokeOpts) (error, <-chan types.AiResponse) {
+func (a *AI) Invoke(ctx context.Context, opts ...InvokeOpts) (<-chan types.AiResponse) {
 	req := types.AiRequest{
 		System:   DefaultSystemPrompt(),
 		Tools:    []types.Tool{},
@@ -97,12 +96,6 @@ func (a *AI) Invoke(ctx context.Context, opts ...InvokeOpts) (error, <-chan type
 	)
 
 	streamChan := make(chan types.AiResponse)
-	err := a.provider.Process(ctx, &req, streamChan)
-
-	if err != nil {
-		logger.Error("Error Invoking Ai", err)
-		return err, nil
-	}
-
-	return nil, streamChan
+	go a.provider.Process(ctx, &req, streamChan)
+	return  streamChan
 }

@@ -42,10 +42,10 @@ type Coversation struct {
 }
 
 type AiResponse struct {
-	messages   string
-	err        error
-	timeStamp  string
-	toolsCalls []ToolCall
+	Messages   string     `json:"messages"`
+	Err        error      `json:"error,omitempty"`
+	TimeStamp  string     `json:"timestamp"`
+	ToolsCalls []ToolCall `json:"tool_calls,omitempty"`
 }
 
 type AiRequest struct {
