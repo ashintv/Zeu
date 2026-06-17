@@ -3,9 +3,9 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 
 	"github.com/ashintv/Zeu/internal/ai"
+	"github.com/ashintv/Zeu/internal/cli"
 	"github.com/ashintv/Zeu/internal/harness"
 	"github.com/ashintv/Zeu/internal/logger"
 	"github.com/ashintv/Zeu/internal/tools"
@@ -117,13 +117,7 @@ func main() {
 
 	agent := harness.CreateAgent(Ai, registry)
 
-	resChan := agent.Invoke(context.Background(), "what is the weather conditon look like in kochi india")
-
-	fmt.Println()
-	fmt.Println()
-
-	for res := range resChan {
-		fmt.Print(res)
-	}
+	terminalCLI := cli.NewCLI(agent)
+	terminalCLI.Run()
 
 }

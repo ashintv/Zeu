@@ -10,26 +10,31 @@ Zeu is designed as a layered harness separating the agent control loop, external
 
 ```mermaid
 graph TD
-    Client["Client / main.go"] --> HarnessLayer["Harness Layer (harness/loop.go)"]
+    Client["Client / main.go"] --> CLILayer["CLI Layer (cli/cli.go)"]
+    CLILayer --> HarnessLayer["Harness Layer (harness/loop.go)"]
     HarnessLayer --> AILayer["AI Layer (ai/llm.go)"]
     HarnessLayer --> ToolsLayer["Tools Layer (tools/executer.go)"]
     AILayer --> ProviderLayer["Provider Layer (provider/ollama.go)"]
     ProviderLayer --> LLM["LLM (Ollama API)"]
 ```
 
-### A. Harness Layer (`internal/harness`)
+### A. CLI Layer (`internal/cli`)
+- **Core Entities**: `CLI`
+- **Responsibilities**: Manages the interactive terminal UI, captures SIGINT (Ctrl+C) signals to cancel execution without stopping the CLI loop, reads user input, and triggers the Harness Layer.
+
+### B. Harness Layer (`internal/harness`)
 - **Core Entities**: `Agent`, `State`
 - **Responsibilities**: Manages the agent loop, holds conversation history, coordinates calls to the AI Layer, and routes tool calls to the Tools Layer.
 
-### B. AI Layer (`internal/ai`)
+### C. AI Layer (`internal/ai`)
 - **Core Entities**: `AI`, `Provider`
 - **Responsibilities**: Abstract interface for interacting with LLM models. Accepts system prompts, tools lists, and messages to construct provider-independent requests.
 
-### C. Provider Layer (`internal/ai/provider`)
+### D. Provider Layer (`internal/ai/provider`)
 - **Core Entities**: `Ollama`
 - **Responsibilities**: Handles connection-level details to local or cloud LLMs. Performs JSON serialization, streams token chunks from model endpoints, and returns normalized token and tool responses.
 
-### D. Tools Layer (`internal/tools`)
+### E. Tools Layer (`internal/tools`)
 - **Core Entities**: `ToolRegistry`, `ToolExcuter`, `Tool`
 - **Responsibilities**: Registers custom executable functions and executes tool calls concurrently in dedicated goroutines.
 
@@ -39,6 +44,7 @@ graph TD
 
 | Entity | Location | Purpose | Key Attributes / Methods |
 | :--- | :--- | :--- | :--- |
+| `CLI` | `internal/cli/cli.go` | Interactive terminal interface loop with cancellation hooks. | `Run()`, `executePrompt(prompt)` |
 | `Agent` | `internal/harness/loop.go` | Orchestrates the primary execution loop. | `Invoke(ctx, Prompt)`, `agentLoop(ctx)` |
 | `State` | `internal/harness/loop.go` | Stores conversation history and loop details. | `messages []Coversation`, `currIter int` |
 | `AI` | `internal/ai/llm.go` | Front-facing manager for model invocations. | `Invoke(ctx, opts...)` |
@@ -85,15 +91,20 @@ The diagram below details the end-to-end execution of a user prompt, involving o
 ```mermaid
 sequenceDiagram
     autonumber
-    actor Client as Client/Main
+    actor User as User
+    participant Client as Client/Main
+    participant CLI as CLI Layer
     participant Agent as Agent (Harness)
     participant AI as AI Layer
     participant Ollama as Ollama Provider
     participant Executer as Tool Executer
     
-    Client->>Agent: Invoke(ctx, Prompt)
+    Client->>CLI: Run()
+    User->>CLI: Input prompt
+    Note over CLI: Creates cancellable Context and captures Ctrl+C
+    CLI->>Agent: Invoke(ctx, Prompt)
     Note over Agent: Starts agentLoop() Goroutine
-    Agent-->>Client: Returns streamCh (string)
+    Agent-->>CLI: Returns streamCh (string)
     
     rect rgb(20, 20, 40)
         Note over Agent: Iteration 1
@@ -103,11 +114,13 @@ sequenceDiagram
         Note over Ollama: Starts Process Goroutine
         Ollama-->>Agent: Send ToolCalls via resChan
         Note over Agent: Appends Assistant Message to History
-        Agent-->>Client: Send "[Calling tool: get_conditions...]" via streamCh
+        Agent-->>CLI: Send "[Calling tool: get_conditions...]" via streamCh
+        CLI-->>User: Print calling indicator
         Agent->>Executer: ExcuteConcurrent(ctx, toolCalls)
         Note over Executer: Runs each tool call in its own goroutine
         Executer-->>Agent: Returns result slice
-        Agent-->>Client: Send "[Tool result: get_conditions...]" via streamCh
+        Agent-->>CLI: Send "[Tool result: get_conditions...]" via streamCh
+        CLI-->>User: Print tool result
         Note over Agent: Appends Tool Response Message to History
     end
 
@@ -117,12 +130,13 @@ sequenceDiagram
         Agent->>AI: Invoke(ctx, resChan, Messages, Tools)
         AI->>Ollama: Process(ctx, Request, resChan)
         Ollama-->>Agent: Streams response text via resChan
-        Agent-->>Client: Streams text chunk via streamCh
+        Agent-->>CLI: Streams text chunk via streamCh
+        CLI-->>User: Print text response chunk
         Note over Agent: Appends Assistant Message to History
     end
     
     Note over Agent: Execution Ended
-    Agent->>Client: Closes streamCh
+    Agent->>CLI: Closes streamCh
 ```
 
 ---
