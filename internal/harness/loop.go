@@ -55,7 +55,6 @@ func (a *Agent) Invoke(ctx context.Context, Prompt string) <-chan string {
 	return a.agentLoop(ctx)
 }
 
-
 func (a *Agent) agentLoop(ctx context.Context) <-chan string {
 	streamCh := make(chan string)
 	go func() {
