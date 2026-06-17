@@ -34,6 +34,7 @@ func CreateAgent(Ai *ai.AI, reg *tools.ToolRegistry) *Agent {
 
 		Ai:       Ai,
 		MaxIter:  20,
+		System:   ai.DefaultSystemPrompt(),
 		registry: reg,
 		excuter: tools.ToolExcuter{
 			Registry: reg,
@@ -72,7 +73,13 @@ func (a *Agent) agentLoop(ctx context.Context) <-chan string {
 
 			a.state.currIter += 1
 			resChan := make(chan types.AiResponse)
-			a.Ai.Invoke(ctx, resChan, ai.WithMessages(a.state.messages), ai.WithTools(a.registry.List()))
+			a.Ai.Invoke(
+				ctx,
+				resChan,
+				ai.WithSystem(a.System),
+				ai.WithMessages(a.state.messages),
+				ai.WithTools(a.registry.List()),
+			)
 			toolCalls := []types.ToolCall{}
 
 			cancelled := false
