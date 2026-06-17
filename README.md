@@ -43,6 +43,9 @@ For a detailed layer-to-layer sequence and context propagation overview, see the
 
 ```
 Zeu/
+├── coding_agent/
+│   ├── main.go                 # Minimal coding agent with 5 practical tools
+│   └── README.md               # How to run and use coding agent tools
 ├── cmd/
 │   └── main.go                 # Entrypoint initializing registry, AI, and starting CLI
 ├── internal/
