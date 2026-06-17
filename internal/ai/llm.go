@@ -77,7 +77,7 @@ func DefaultSystemPrompt() string {
 			Your goal is successful task completion while maintaining accuracy, reliability, and helpfulness.`
 }
 
-func (a *AI) Invoke(ctx context.Context, opts ...InvokeOpts) (<-chan types.AiResponse) {
+func (a *AI) Invoke(ctx context.Context, streamChan chan<- types.AiResponse, opts ...InvokeOpts) {
 	req := types.AiRequest{
 		System:   DefaultSystemPrompt(),
 		Tools:    []types.Tool{},
@@ -88,14 +88,13 @@ func (a *AI) Invoke(ctx context.Context, opts ...InvokeOpts) (<-chan types.AiRes
 		opt(&req)
 	}
 
-	logger.Info(
-		"Request created",
-		req,
-		"with provider",
-		a.provider.Info(),
+	logger.Infof(
+		"Request created with provider %s (Model: %s) - Messages: %d, Tools: %d",
+		a.provider.Info().Name,
+		a.provider.Info().Model,
+		len(req.Messages),
+		len(req.Tools),
 	)
 
-	streamChan := make(chan types.AiResponse)
 	go a.provider.Process(ctx, &req, streamChan)
-	return  streamChan
 }

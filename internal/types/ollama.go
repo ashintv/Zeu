@@ -15,18 +15,36 @@ type OllamaTool struct {
 	Function OllamaToolFunction `json:"function"`
 }
 
+type OllamaRequestMessage struct {
+	Role       string           `json:"role"`
+	Content    string           `json:"content"`
+	ToolCalls  []OllamaToolCall `json:"tool_calls,omitempty"`
+	ToolCallID string           `json:"tool_call_id,omitempty"`
+}
+
 type OllamaChatRequest struct {
-	Model    string        `json:"model"`
-	Messages []Coversation `json:"messages"`
-	Stream   bool          `json:"stream"`
-	Tools    []Tool        `json:"tools,omitempty"`
+	Model    string                 `json:"model"`
+	Messages []OllamaRequestMessage `json:"messages"`
+	Stream   bool                   `json:"stream"`
+	Tools    []Tool                 `json:"tools,omitempty"`
+}
+
+type OllamaToolCallFunction struct {
+	Name      string          `json:"name"`
+	Arguments json.RawMessage `json:"arguments"`
+}
+
+type OllamaToolCall struct {
+	Id       string                  `json:"id"`
+	Type     string                  `json:"type"`
+	Function OllamaToolCallFunction `json:"function"`
 }
 
 type OllamaChatMessage struct {
-	Role      string     `json:"role"`
-	Content   string     `json:"content"`
-	Thinking  string     `json:"thinking,omitempty"`
-	ToolCalls []ToolCall `json:"tool_calls,omitempty"`
+	Role      string           `json:"role"`
+	Content   string           `json:"content"`
+	Thinking  string           `json:"thinking,omitempty"`
+	ToolCalls []OllamaToolCall `json:"tool_calls,omitempty"`
 }
 
 type OllamaChatResponse struct {

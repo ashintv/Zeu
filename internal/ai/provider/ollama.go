@@ -71,29 +71,51 @@ func NewOllama(opts ...Option) *Ollama {
 func (O *Ollama) Process(ctx context.Context, req *types.AiRequest, streamCh chan<- types.AiResponse) {
 	defer close(streamCh)
 
-	_ = ctx
-	_ = streamCh
+	if err := ctx.Err(); err != nil {
+		select {
+		case streamCh <- types.AiResponse{Err: err}:
+		case <-ctx.Done():
+		}
+		return
+	}
+
 	reqBody := O.BuildRequest(req)
 	parsed, err := json.Marshal(reqBody)
 
 	if err != nil {
 		logger.Error("Unable to parse", reqBody)
-		streamCh <- types.AiResponse{
-			Err: err,
+		select {
+		case streamCh <- types.AiResponse{Err: err}:
+		case <-ctx.Done():
 		}
 		return
 	}
 
-	resp, err := http.Post(O.Url, O.DataType, bytes.NewBuffer(parsed))
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", O.Url, bytes.NewBuffer(parsed))
 	if err != nil {
-		streamCh <- types.AiResponse{
-			Err: err,
+		select {
+		case streamCh <- types.AiResponse{Err: err}:
+		case <-ctx.Done():
+		}
+		return
+	}
+	httpReq.Header.Set("Content-Type", O.DataType)
+
+	resp, err := http.DefaultClient.Do(httpReq)
+	if err != nil {
+		select {
+		case streamCh <- types.AiResponse{Err: err}:
+		case <-ctx.Done():
 		}
 		return
 	}
 	defer resp.Body.Close()
+
 	scanner := bufio.NewScanner(resp.Body)
 	for scanner.Scan() {
+		if err := ctx.Err(); err != nil {
+			return
+		}
 
 		line := scanner.Text()
 
@@ -106,31 +128,73 @@ func (O *Ollama) Process(ctx context.Context, req *types.AiRequest, streamCh cha
 			continue
 		}
 
+		var toolCalls []types.ToolCall
+		if len(chunk.Message.ToolCalls) > 0 {
+			toolCalls = make([]types.ToolCall, len(chunk.Message.ToolCalls))
+			for i, tc := range chunk.Message.ToolCalls {
+				toolCalls[i] = types.ToolCall{
+					Id:   tc.Id,
+					Name: tc.Function.Name,
+					Args: tc.Function.Arguments,
+				}
+			}
+		}
+
 		aiResponse := types.AiResponse{
 			Messages:   chunk.Message.Content,
 			Err:        nil,
 			TimeStamp:  chunk.CreatedAt,
-			ToolsCalls: chunk.Message.ToolCalls,
+			ToolsCalls: toolCalls,
 		}
 		
-		streamCh <- aiResponse
+		select {
+		case streamCh <- aiResponse:
+		case <-ctx.Done():
+			return
+		}
 	}
 
 	err = scanner.Err()
-	if err!= nil{
+	if err != nil && ctx.Err() == nil {
 		logger.Error(err)
+		select {
+		case streamCh <- types.AiResponse{Err: err}:
+		case <-ctx.Done():
+		}
 	}
-	
 }
 
 func (O *Ollama) BuildRequest(req *types.AiRequest) *types.OllamaChatRequest {
-
-	message := types.Coversation{
-		Role: "system",
+	messages := make([]types.OllamaRequestMessage, 0, len(req.Messages)+1)
+	
+	messages = append(messages, types.OllamaRequestMessage{
+		Role:    "system",
 		Content: req.System,
-	}
+	})
 
-	messages := append([]types.Coversation{message},req.Messages...)
+	for _, msg := range req.Messages {
+		var toolCalls []types.OllamaToolCall
+		if len(msg.ToolCalls) > 0 {
+			toolCalls = make([]types.OllamaToolCall, len(msg.ToolCalls))
+			for i, tc := range msg.ToolCalls {
+				toolCalls[i] = types.OllamaToolCall{
+					Id:   tc.Id,
+					Type: "function",
+					Function: types.OllamaToolCallFunction{
+						Name:      tc.Name,
+						Arguments: tc.Args,
+					},
+				}
+			}
+		}
+
+		messages = append(messages, types.OllamaRequestMessage{
+			Role:       msg.Role,
+			Content:    msg.Content,
+			ToolCalls:  toolCalls,
+			ToolCallID: msg.ToolCallID,
+		})
+	}
 
 	return &types.OllamaChatRequest{
 		Model:    O.Model,
