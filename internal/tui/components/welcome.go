@@ -1,9 +1,9 @@
 package components
 
 import (
-	"strings"
+	
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 )
 
 var (
@@ -13,57 +13,47 @@ var (
 
 	titleStyle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(lipgloss.Color("#00D7FF"))
+			Foreground(lipgloss.Color("#CC785C"))
 
 	textStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#CBD5E1"))
+			Foreground(lipgloss.Color("#C4CCDA"))
 
 	linkStyle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(lipgloss.Color("#10B981"))
+			Foreground(lipgloss.Color("#D4A27A"))
 
 	separatorStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#334155"))
+			Foreground(lipgloss.Color("#3D4A57"))
 
 	subtleStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#94A3B8"))
+			Foreground(lipgloss.Color("#6B7F96"))
 )
 
-func Welcome(width int) string {
-	logo := Logo()
+func Welcome(width int, logoFrame int) string {
+	logo := Logo(logoFrame)
 
-	// Right side: name + tagline
-	// label := lipgloss.JoinVertical(
-	//
+	content := lipgloss.JoinVertical(
+		lipgloss.Left,
+		brandName.Render("Zeu ai"),
+		tagline.Render("orchestrate everything"),
 
-	// )
-
-	content := lipgloss.NewStyle().
-		MarginTop(1).
-		Render(
-			lipgloss.JoinVertical(
-				lipgloss.Left,
-				brandName.Render("Zeu ai"),
-				tagline.Render("orchestrate everything"),
-
-				"",
-				tagline.Render("⭐ Star the project:"),
-				linkStyle.Render("github.com/ashintv/zeu"),
-
-			),
-		)
+		"",
+		tagline.Render("⭐ Star the project:"),
+		linkStyle.Render("github.com/ashintv/zeu"),
+	)
 
 	body := lipgloss.JoinHorizontal(
-		lipgloss.Top,
+		lipgloss.Center,
 		logo,
-		"    ",
-		"    ",
+		"        ", // 8 spaces padding
 		content,
 	)
 
-	line := separatorStyle.Render(
-		strings.Repeat("─", max(0, width)),
-	)
+	hints := subtleStyle.Render("  ctrl+c quit  •  enter send")
 
-	return body + "\n\n" + line
+	// line := separatorStyle.Render(
+	// 	strings.Repeat("─", max(0, width)),
+	// )
+
+	return body + "\n\n" + hints + "\n\n"  
 }

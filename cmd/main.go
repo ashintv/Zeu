@@ -125,18 +125,17 @@
 package main
 
 import (
+	tea "charm.land/bubbletea/v2"
 	"github.com/ashintv/Zeu/internal/tui"
-	tea "github.com/charmbracelet/bubbletea"
 )
-
 
 func main() {
 
-    p := tea.NewProgram(
-        tui.GetInitModel()(),
-    )
+	p := tea.NewProgram(
+		tui.GetInitModel()(),
+	)
 
-    if _, err := p.Run(); err != nil {
-        panic(err)
-    }
+	if _, err := p.Run(); err != nil {
+		panic(err)
+	}
 }
