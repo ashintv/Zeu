@@ -1,8 +1,6 @@
 package components
 
 import (
-	
-
 	"charm.land/lipgloss/v2"
 )
 
@@ -55,5 +53,5 @@ func Welcome(width int, logoFrame int) string {
 	// 	strings.Repeat("─", max(0, width)),
 	// )
 
-	return body + "\n\n" + hints + "\n\n"  
+	return "\n" + body + "\n\n" + hints
 }

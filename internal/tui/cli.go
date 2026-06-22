@@ -1,3 +1,4 @@
+// Package tui provides terminal user interface components
 package tui
 
 import (
@@ -8,6 +9,8 @@ import (
 	"charm.land/bubbles/v2/textarea"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+
+	"github.com/ashintv/Zeu/internal/harness"
 
 	"github.com/ashintv/Zeu/internal/tui/components"
 	"github.com/ashintv/Zeu/internal/tui/handler"
@@ -24,47 +27,41 @@ func logoTick() tea.Cmd {
 }
 
 type model struct {
-	Width       int
-	Input       components.Input
-	Messages    []types.Coversation
-	msgTimes    []string
-	streamCh    <-chan string
-	streamBuf   string
-	chatLoader  spinner.Model
-	toolLoader  spinner.Model
-	chatLoading bool
-	toolLoading bool
-	logoFrame   int
-	startTime   time.Time
-	chatHandler *handler.ChatHandler
+	Width         int
+	Input         components.Input
+	msgTimes      []string
+	streamCh      <-chan types.Coversation
+	streamingConv *types.Coversation
+	chatLoader    spinner.Model
+	toolLoader    spinner.Model
+	chatLoading   bool
+	toolLoading   bool
+	logoFrame     int
+	startTime     time.Time
+	chatHandler   *handler.ChatHandler
+	agent         *harness.Agent
 }
 
 var loadingStyle = lipgloss.NewStyle().
 	Foreground(lipgloss.Color("#8B9EB7"))
 
-func initialModel() model {
+func GetNewCli(agent *harness.Agent) model {
 	chatSpinner := spinner.New()
 	chatSpinner.Spinner = spinner.Jump
 
 	toolSpinner := spinner.New()
 	toolSpinner.Spinner = spinner.Meter
 
-	cfg := handler.DefaultConfig()
-	chatHandler := handler.NewChatHandler(cfg)
+	chatHandler := handler.NewChatHandler(agent)
 
 	return model{
 		Input:       components.NewInput(),
-		Messages:    make([]types.Coversation, 0),
 		msgTimes:    make([]string, 0),
 		chatLoader:  chatSpinner,
 		toolLoader:  toolSpinner,
 		startTime:   time.Now(),
 		chatHandler: chatHandler,
 	}
-}
-
-func GetInitModel() func() model {
-	return initialModel
 }
 
 func (m model) Init() tea.Cmd {
@@ -113,38 +110,29 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 
-			m.Messages = append(m.Messages, types.Coversation{
-				Role:    "user",
-				Content: value,
-			})
 			m.msgTimes = append(m.msgTimes, theme.Now())
 
 			m.Input.Reset()
 			m.chatLoading = true
-			m.streamBuf = ""
+			m.streamingConv = nil
 
-			ch := m.chatHandler.FakeAI()
+			ch := m.chatHandler.Invoke(value)
 			m.streamCh = ch
-
-			m.Messages = append(m.Messages, types.Coversation{
-				Role:    "agent",
-				Content: "",
-			})
 			m.msgTimes = append(m.msgTimes, theme.Now())
 
 			return m, m.chatHandler.WaitForToken(ch)
 		}
 
 	case handler.StreamTokenMsg:
-		m.streamBuf += string(msg)
-		if len(m.Messages) > 0 {
-			m.Messages[len(m.Messages)-1].Content = m.streamBuf
-		}
+		conv := types.Coversation(msg)
+		m.streamingConv = &conv
+		// Agent loop automatically updates state, we just track current streaming conversation
 		return m, m.chatHandler.WaitForToken(m.streamCh)
 
 	case handler.StreamDoneMsg:
 		m.chatLoading = false
 		m.streamCh = nil
+		m.streamingConv = nil
 	}
 
 	var cmd tea.Cmd
@@ -165,10 +153,19 @@ func (m model) RenderChat() string {
 	th := theme.Default
 	var rendered []string
 
-	for i, msg := range m.Messages {
+	messages := m.chatHandler.GetMessages()
+
+	// If we're streaming, append the streaming conversation to display
+	if m.chatLoading && m.streamingConv != nil {
+		messages = append(messages, *m.streamingConv)
+	}
+
+	for i, msg := range messages {
+		content := msg.Content
+
 		if msg.Role == "user" {
 			textLength := 0
-			lines := strings.Split(msg.Content, "\n")
+			lines := strings.Split(content, "\n")
 			for _, line := range lines {
 				if len(line) > textLength {
 					textLength = len(line)
@@ -195,7 +192,7 @@ func (m model) RenderChat() string {
 			rendered = append(rendered, sepLine)
 
 			textColorStyle := lipgloss.NewStyle().Foreground(th.User.GetForeground())
-			contentLines := strings.Split(msg.Content, "\n")
+			contentLines := strings.Split(content, "\n")
 			var prefixedLines []string
 			for idx, cLine := range contentLines {
 				styledLine := textColorStyle.Render(cLine)
@@ -206,13 +203,15 @@ func (m model) RenderChat() string {
 				}
 			}
 			rendered = append(rendered, strings.Join(prefixedLines, "\n"))
+
+			rendered = append(rendered, "")
 		} else if msg.Role == "agent" || msg.Role == "assistant" || msg.Role == "ai" || msg.Role == "model" {
-			content := th.RoleStyle(msg.Role).Render(msg.Content)
-			rendered = append(rendered, content)
+			styledContent := th.RoleStyle(msg.Role).Render(content)
+			rendered = append(rendered, styledContent)
 		} else {
-			content := th.RoleStyle(msg.Role).Render(msg.Content)
+			styledContent := th.RoleStyle(msg.Role).Render(content)
 			label := th.RoleLabel(msg.Role)
-			rendered = append(rendered, label+"  "+content)
+			rendered = append(rendered, label+"  "+styledContent)
 
 			rendered = append(rendered, "")
 		}
@@ -226,15 +225,13 @@ func (m model) View() tea.View {
 
 	if m.chatLoading {
 		loading = loadingStyle.Render(
-			m.chatLoader.View()+" Thinking...",
+			m.chatLoader.View()+" Working...",
 		) + "\n"
 	}
 
 	v := tea.NewView(
 		lipgloss.JoinVertical(
 			lipgloss.Left,
-			"",
-			"",
 			components.Welcome(m.Width, m.logoFrame),
 			m.RenderChat(),
 			loading,

@@ -41,7 +41,7 @@ func CreateAgent(Ai *ai.AI, reg *tools.ToolRegistry) *Agent {
 	}
 }
 
-func (a *Agent) Invoke(ctx context.Context, Prompt string) <-chan string {
+func (a *Agent) Invoke(ctx context.Context, Prompt string) <-chan types.Coversation {
 	conv := types.Coversation{
 		Role:    "user",
 		Content: Prompt,
@@ -54,9 +54,8 @@ func (a *Agent) Invoke(ctx context.Context, Prompt string) <-chan string {
 	return a.agentLoop(ctx)
 }
 
-
-func (a *Agent) agentLoop(ctx context.Context) <-chan string {
-	streamCh := make(chan string)
+func (a *Agent) agentLoop(ctx context.Context) <-chan types.Coversation {
+	streamCh := make(chan types.Coversation)
 	go func() {
 		defer close(streamCh)
 		for {
@@ -102,7 +101,10 @@ func (a *Agent) agentLoop(ctx context.Context) <-chan string {
 					if res.Messages != "" {
 						assistantMsg += res.Messages
 						select {
-						case streamCh <- res.Messages:
+						case streamCh <- types.Coversation{
+							Role:    "assistant",
+							Content: assistantMsg,
+						}:
 						case <-ctx.Done():
 							logger.Info("Agent loop cancelled during stream: ", ctx.Err())
 							cancelled = true
@@ -127,7 +129,10 @@ func (a *Agent) agentLoop(ctx context.Context) <-chan string {
 			if len(toolCalls) > 0 {
 				for _, tc := range toolCalls {
 					select {
-					case streamCh <- fmt.Sprintf("\n[Calling tool: %s with args: %s]\n", tc.Name, string(tc.Args)):
+					case streamCh <- types.Coversation{
+						Role:    "system",
+						Content: fmt.Sprintf("[Calling tool: %s with args: %s]", tc.Name, string(tc.Args)),
+					}:
 					case <-ctx.Done():
 						cancelled = true
 						break
@@ -154,14 +159,18 @@ func (a *Agent) agentLoop(ctx context.Context) <-chan string {
 							content = string(jsonData)
 						}
 					}
-					a.state.messages = append(a.state.messages, types.Coversation{
+					toolMsg := types.Coversation{
 						Role:       "tool",
 						Content:    content,
 						ToolCallID: toolCalls[i].Id,
-					})
+					}
+					a.state.messages = append(a.state.messages, toolMsg)
 
 					select {
-					case streamCh <- fmt.Sprintf("\n[Tool result: %s -> %s]\n", toolCalls[i].Name, content):
+					case streamCh <- types.Coversation{
+						Role:    "system",
+						Content: fmt.Sprintf("[Tool result: %s -> %s]", toolCalls[i].Name, content),
+					}:
 					case <-ctx.Done():
 						cancelled = true
 						break
@@ -181,4 +190,12 @@ func (a *Agent) agentLoop(ctx context.Context) <-chan string {
 	}()
 
 	return streamCh
+}
+
+func (a *Agent) GetState() []types.Coversation {
+	return a.state.messages
+}
+
+func (a *Agent) SetState(state []types.Coversation) {
+	a.state.messages = state
 }

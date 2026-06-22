@@ -8,7 +8,7 @@ import (
 
 func TestLoggerLevels(t *testing.T) {
 	var buf bytes.Buffer
-	l := New(WithWriter(&buf), WithLevel(InfoLevel), WithColors(false))
+	l := New(WithWriter(&buf), WithLevel(InfoLevel), WithColors(false), WithEnabled(true))
 
 	l.Debug("should not see this")
 	if buf.Len() > 0 {
@@ -29,7 +29,7 @@ func TestLoggerLevels(t *testing.T) {
 
 func TestLoggerTags(t *testing.T) {
 	var buf bytes.Buffer
-	l := New(WithWriter(&buf), WithLevel(DebugLevel), WithColors(false))
+	l := New(WithWriter(&buf), WithLevel(DebugLevel), WithColors(false), WithEnabled(true))
 
 	tagLog := l.Tagged("HTTP", "GET")
 	tagLog.Info("request processed")
@@ -45,7 +45,7 @@ func TestLoggerTags(t *testing.T) {
 
 func TestLoggerCaller(t *testing.T) {
 	var buf bytes.Buffer
-	l := New(WithWriter(&buf), WithLevel(InfoLevel), WithColors(false), WithCaller(true))
+	l := New(WithWriter(&buf), WithLevel(InfoLevel), WithColors(false), WithCaller(true), WithEnabled(true))
 
 	l.Info("with caller")
 	output := buf.String()
@@ -57,7 +57,7 @@ func TestLoggerCaller(t *testing.T) {
 
 func TestLoggerStream(t *testing.T) {
 	var buf bytes.Buffer
-	l := New(WithWriter(&buf), WithLevel(InfoLevel), WithColors(false))
+	l := New(WithWriter(&buf), WithLevel(InfoLevel), WithColors(false), WithEnabled(true))
 
 	stream := l.Tagged("LLM").Stream()
 	_, _ = stream.WriteString("thinking")
@@ -68,5 +68,23 @@ func TestLoggerStream(t *testing.T) {
 	expected := "[stream] [LLM] : thinking...done\n>>>\n"
 	if buf.String() != expected {
 		t.Errorf("expected stream output %q, got %q", expected, buf.String())
+	}
+}
+
+func TestLoggerDisabled(t *testing.T) {
+	var buf bytes.Buffer
+	// Create logger without WithEnabled(true) - should be disabled by default
+	l := New(WithWriter(&buf), WithLevel(InfoLevel), WithColors(false))
+
+	l.Info("should not see this")
+	if buf.Len() > 0 {
+		t.Errorf("expected no output when logger is disabled, got %q", buf.String())
+	}
+
+	// Now enable it
+	l.SetEnabled(true)
+	l.Info("should see this")
+	if !strings.Contains(buf.String(), "INFO  should see this") {
+		t.Errorf("expected info message after enabling, got %q", buf.String())
 	}
 }

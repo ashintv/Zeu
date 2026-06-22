@@ -54,6 +54,7 @@ type Logger struct {
 	tags         []string
 	enableColors bool
 	showCaller   bool
+	enabled      bool
 }
 
 // Option allows configuring the logger instance.
@@ -87,6 +88,13 @@ func WithCaller(show bool) Option {
 	}
 }
 
+// WithEnabled enables or disables the logger entirely.
+func WithEnabled(enable bool) Option {
+	return func(l *Logger) {
+		l.enabled = enable
+	}
+}
+
 // New creates a new custom Logger instance.
 func New(opts ...Option) *Logger {
 	l := &Logger{
@@ -94,6 +102,7 @@ func New(opts ...Option) *Logger {
 		level:        InfoLevel,
 		enableColors: true,
 		showCaller:   false,
+		enabled:      false, // Disabled by default
 	}
 	for _, opt := range opts {
 		opt(l)
@@ -129,6 +138,20 @@ func (l *Logger) SetCaller(show bool) {
 	l.showCaller = show
 }
 
+// SetEnabled enables or disables the logger.
+func (l *Logger) SetEnabled(enable bool) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.enabled = enable
+}
+
+// IsEnabled returns whether the logger is enabled.
+func (l *Logger) IsEnabled() bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.enabled
+}
+
 // Tagged returns a new sub-logger with the specified tags appended to the current tags.
 func (l *Logger) Tagged(tags ...string) *Logger {
 	l.mu.Lock()
@@ -144,6 +167,7 @@ func (l *Logger) Tagged(tags ...string) *Logger {
 		tags:         newTags,
 		enableColors: l.enableColors,
 		showCaller:   l.showCaller,
+		enabled:      l.enabled,
 	}
 }
 
@@ -241,6 +265,11 @@ func (l *Logger) log(lvl Level, msg string) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
+	// Check if logging is enabled
+	if !l.enabled {
+		return
+	}
+
 	if lvl < l.level {
 		return
 	}
@@ -281,7 +310,7 @@ func (l *Logger) Errorf(format string, args ...any) {
 
 // --- Global Logger Package-Level API ---
 
-var defaultLogger = New(WithLevel(InfoLevel))
+var defaultLogger = New(WithLevel(InfoLevel), WithEnabled(false))
 
 // SetDefaultLevel updates the global logger's log level.
 func SetDefaultLevel(lvl Level) {
@@ -296,6 +325,26 @@ func EnableColors(enable bool) {
 // ShowCaller globally enables or disables caller location info.
 func ShowCaller(show bool) {
 	defaultLogger.SetCaller(show)
+}
+
+// Enable globally enables the default logger.
+func Enable() {
+	defaultLogger.SetEnabled(true)
+}
+
+// Disable globally disables the default logger.
+func Disable() {
+	defaultLogger.SetEnabled(false)
+}
+
+// SetEnabled globally enables or disables the default logger.
+func SetEnabled(enable bool) {
+	defaultLogger.SetEnabled(enable)
+}
+
+// IsEnabled returns whether the default logger is enabled.
+func IsEnabled() bool {
+	return defaultLogger.IsEnabled()
 }
 
 // Tagged returns a sub-logger of the global logger with the given tags.
